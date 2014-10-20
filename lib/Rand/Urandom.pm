@@ -1,4 +1,4 @@
-package Crypt::UseUrandom;
+package Rand::Urandom;
 use strict;
 use warnings;
 use Config;
@@ -11,16 +11,19 @@ sub useUrandom(;$) {
 
 	my $buf = trySyscall();
 	if (!$buf) {
-		open(my $fh, '<:raw', '/dev/urandom') || die "UseUrandom: Can't open /dev/urandom: $!";
+		my $file = -r '/dev/arandom' ? '/dev/arandom' : '/dev/urandom';
+		open(my $fh, '<:raw', $file) || die "Rand::Urandom: Can't open $file: $!";
 
 		my $got = read($fh, $buf, 8);
 		if ($got == 0 || $got != 8) {
-			die "UseUrandom: failed to read from /dev/urandom: $!";
+			die "Rand::Urandom: failed to read from $file: $!";
 		}
 		close($fh);
 	}
 
 	my $n = unpack('Q', $buf);
+	return $n if($max == -1);
+
 	$max *= $n / 2**64;
 	return $max;
 }
@@ -41,13 +44,13 @@ sub trySyscall {
 		}
 
 		if ($ret != 8) {
-			warn "UseUrandom: huh, getrandom() returned $ret... trying again";
+			warn "Rand::Urandom: huh, getrandom() returned $ret... trying again";
 			$ret = -1;
 			$!   = EINTR;
 		}
 
 		if ($tries++ > 100) {
-			warn "UseUrandom: getrandom() looped lots, falling back";
+			warn "Rand::Urandom: getrandom() looped lots, falling back";
 			return;
 		}
 	} while ($ret == -1 && $! == EINTR);
@@ -56,7 +59,6 @@ sub trySyscall {
 }
 
 our $OrigRand;
-
 sub BEGIN {
 	no warnings 'redefine';
 	$OrigRand           = \&CORE::rand;
@@ -64,23 +66,22 @@ sub BEGIN {
 }
 
 
-
 1;
 __END__
 
 =head1 NAME
 
-Crypt::UseUrandom - replaces rand() with /dev/urandom
+Rand::Urandom - replaces rand() with /dev/urandom
 
 =head1 SYNOPSIS
 
-  use Crypt::UseUrandom();
+  use Rand::Urandom();
 
 =head1 DESCRIPTION
 
 http://sockpuppet.org/blog/2014/02/25/safely-generate-random-numbers/
 
-Perls built-in rand has a few problems:
+Perl's built-in rand has a few problems:
 
 =over
 
@@ -112,7 +113,7 @@ None by default.
 
 =head1 SEE ALSO
 
-https://github.com/badalex/Crypt-UseUrandom
+https://github.com/badalex/Rand-Urandom
 
 =head1 AUTHOR
 

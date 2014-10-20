@@ -2,5 +2,5 @@ Changes
 Makefile.PL
 MANIFEST
 README
-t/Crypt-UseUrandom.t
-lib/Crypt/UseUrandom.pm
+t/Rand-Urandom.t
+lib/Rand/Urandom.pm
