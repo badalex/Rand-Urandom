@@ -1,0 +1,6 @@
+Revision history for Perl extension Crypt::UseUrandom.
+
+0.01  Sun Oct 19 18:17:08 2014
+	- original version; created by h2xs 1.23 with options
+		-XAn Crypt::UseUrandom
+
