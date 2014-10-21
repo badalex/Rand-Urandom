@@ -3,54 +3,48 @@ use strict;
 use warnings;
 use Config;
 use POSIX qw(EINTR ENOSYS);
+use Exporter qw(import);
 
+our @EXPORT_OK = qw(perl_rand rand_bytes);
 our $VERSION = '0.01';
 
-sub useUrandom(;$) {
+## no critic (Subroutines::ProhibitSubroutinePrototypes)
+sub use_urandom(;$) {
 	my $max = shift || 1;
 
-	my $buf = trySyscall();
-	if (!$buf) {
-		my $file = -r '/dev/arandom' ? '/dev/arandom' : '/dev/urandom';
-		open(my $fh, '<:raw', $file) || die "Rand::Urandom: Can't open $file: $!";
-
-		my $got = read($fh, $buf, 8);
-		if ($got == 0 || $got != 8) {
-			die "Rand::Urandom: failed to read from $file: $!";
-		}
-		close($fh);
-	}
-
+	my $buf = rand_bytes(8);
 	my $n = unpack('Q', $buf);
-	return $n if($max == -1);
+	return $n if ($max == 2**64);
 
 	$max *= $n / 2**64;
 	return $max;
 }
 
-sub trySyscall {
+sub try_syscall {
+	my $num = shift;
 	if ($Config{'osname'} !~ m/linux/) {
 		return;
 	}
 
-	my $num = $Config{'archname'} =~ m/x86_64/ ? 318 : 355;
+	my $syscall = $Config{'archname'} =~ m/x86_64/ ? 318 : 355;
 	my $ret;
-	my $buf   = ' ' x 8;
+	my $buf   = ' ' x $num;
 	my $tries = 0;
+	local $! = undef;
 	do {
-		$ret = syscall($num, $buf, 8, 0);
+		$ret = syscall($syscall, $buf, $num, 0);
 		if ($! == ENOSYS) {
 			return;
 		}
 
-		if ($ret != 8) {
+		if ($ret != $num) {
 			warn "Rand::Urandom: huh, getrandom() returned $ret... trying again";
 			$ret = -1;
 			$!   = EINTR;
 		}
 
 		if ($tries++ > 100) {
-			warn "Rand::Urandom: getrandom() looped lots, falling back";
+			warn 'Rand::Urandom: getrandom() looped lots, falling back';
 			return;
 		}
 	} while ($ret == -1 && $! == EINTR);
@@ -58,11 +52,33 @@ sub trySyscall {
 	return $buf;
 }
 
-our $OrigRand;
+sub rand_bytes {
+	my $num = shift;
+
+	my $buf = try_syscall($num);
+	if (!$buf) {
+		local $! = undef;
+		my $file = -r '/dev/arandom' ? '/dev/arandom' : '/dev/urandom';
+		open(my $fh, '<:raw', $file) || die "Rand::Urandom: Can't open $file: $!";
+
+		my $got = read($fh, $buf, $num);
+		if ($got == 0 || $got != $num) {
+			die "Rand::Urandom: failed to read from $file: $!";
+		}
+		close($fh) || die "Rand::Urandom: close failed: $!";
+	}
+	return $buf;
+}
+
+my $orig_rand;
+sub perl_rand {
+	goto &$orig_rand;
+}
+
 sub BEGIN {
+	$orig_rand           = \&CORE::rand;
 	no warnings 'redefine';
-	$OrigRand           = \&CORE::rand;
-	*CORE::GLOBAL::rand = \&useUrandom;
+	*CORE::GLOBAL::rand = \&use_urandom;
 }
 
 
@@ -76,6 +92,20 @@ Rand::Urandom - replaces rand() with /dev/urandom
 =head1 SYNOPSIS
 
   use Rand::Urandom();
+
+  # now grabs 8 bytes from /dev/urandom
+  # works just like rand, that is returns a random fractional number >= 0 and
+  # less than $max
+  my $r = rand($max);
+
+  # or
+  use Rand::Urandom qw(perl_rand rand_bytes);
+
+  # rand() still overloaded, but we want to use the original rand
+  my $r = perl_rand();
+
+  # returns $int random bytes
+  my $r = rand_bytes($int);
 
 =head1 DESCRIPTION
 
@@ -104,12 +134,25 @@ back to /dev/urandom. Otherwise it dies.
 This means it should "DoTheRightThing" on most unix based systems, including,
 OpenBSD, FreesBSD, Mac OSX, Linux, blah blah.
 
+You: I<Yeah, Ok I see you're point, but do I actually want to use this?>
+
+Me: B<Maybe!>, It could also be a really bad idea!
+
+=head2 SUBROUTINES
+
+=over
+
+=item *
+perl_rand() - the original rand()
+
+=item *
+rand_bytes($int) - returns $int rand bytes()
+
+=back
 
 =head2 EXPORT
 
-None by default.
-
-
+None by default. perl_rand(), rand_bytes();
 
 =head1 SEE ALSO
 

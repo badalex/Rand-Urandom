@@ -1,10 +1,10 @@
 use strict;
 use warnings;
 
-use Test::More tests => 6;
-BEGIN { use_ok('Rand::Urandom') };
+use Test::More tests => 9;
+BEGIN { use_ok('Rand::Urandom', qw(perl_rand rand_bytes)) };
 
-ok(\&CORE::GLOBAL::rand == \&Rand::Urandom::useUrandom, "rand() overloaded");
+ok(\&CORE::GLOBAL::rand == \&Rand::Urandom::use_urandom, "rand() overloaded");
 
 ok(rand() <= 1, '<= 1');
 ok(rand(255) <= 255, '<= 255');
@@ -23,3 +23,7 @@ if ($pid) {
 	print rand();
 	exit 0;
 }
+
+ok(defined perl_rand(), "perl_rand");
+ok(length(rand_bytes(8)) == 8, "rand_bytes");
+ok(rand(2**64), "rand uint64");
