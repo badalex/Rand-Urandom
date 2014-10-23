@@ -6,14 +6,20 @@ use POSIX qw(EINTR ENOSYS);
 use Exporter qw(import);
 
 our @EXPORT_OK = qw(perl_rand rand_bytes);
-our $VERSION = '0.01';
+our $VERSION = '0.02';
 
 ## no critic (Subroutines::ProhibitSubroutinePrototypes)
 sub use_urandom(;$) {
 	my $max = shift || 1;
 
 	my $buf = rand_bytes(8);
-	my $n = unpack('Q', $buf);
+	my $n;
+	if($Config{'use64bitint'}) {
+		$n = unpack('Q', $buf);
+	}else {
+		# just treat it as 2 longs for now...
+		$n = unpack('LL', $buf);
+	}
 	return $n if ($max == 2**64);
 
 	$max *= $n / 2**64;
@@ -72,12 +78,17 @@ sub rand_bytes {
 
 my $orig_rand;
 sub perl_rand {
+	if ($^V lt 'v5.16') {
+		die 'Rand::Urandom: sorry, you cant access the original rand function on perls older than 5.16';
+	}
+
 	goto &$orig_rand;
 }
 
 sub BEGIN {
-	$orig_rand           = \&CORE::rand;
 	no warnings 'redefine';
+	no warnings 'prototype';
+	$orig_rand           = \&CORE::rand;
 	*CORE::GLOBAL::rand = \&use_urandom;
 }
 
@@ -129,7 +140,7 @@ seeding is hard to get right
 =back
 
 By default it uses the getentropy() (only available in > Linux 3.17) and falls
-back to /dev/urandom. Otherwise it dies.
+back to /dev/arandom then /dev/urandom. Otherwise it dies.
 
 This means it should "DoTheRightThing" on most unix based systems, including,
 OpenBSD, FreesBSD, Mac OSX, Linux, blah blah.
@@ -143,7 +154,7 @@ Me: B<Maybe!>, It could also be a really bad idea!
 =over
 
 =item *
-perl_rand() - the original rand()
+perl_rand() - the original rand(), only works on perls newer or equal to 5.16
 
 =item *
 rand_bytes($int) - returns $int rand bytes()

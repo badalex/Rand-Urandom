@@ -33,7 +33,7 @@ bitten by this before.
 - seeding is hard to get right
 
 By default it uses the getentropy() (only available in > Linux 3.17) and falls
-back to /dev/urandom. Otherwise it dies.
+back to /dev/arandom then /dev/urandom. Otherwise it dies.
 
 This means it should "DoTheRightThing" on most unix based systems, including,
 OpenBSD, FreesBSD, Mac OSX, Linux, blah blah.
@@ -44,7 +44,7 @@ Me: **Maybe!**, It could also be a really bad idea!
 
 ## SUBROUTINES
 
-- perl\_rand() - the original rand()
+- perl\_rand() - the original rand(), only works on perls newer or equal to 5.16
 - rand\_bytes($int) - returns $int rand bytes()
 
 ## EXPORT
