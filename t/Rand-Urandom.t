@@ -1,7 +1,7 @@
 use strict;
 use warnings;
 
-use Test::More tests => 11;
+use Test::More tests => 12;
 BEGIN { use_ok('Rand::Urandom', qw(perl_rand rand_bytes)) };
 
 ok(\&CORE::GLOBAL::rand == \&Rand::Urandom::use_urandom, "rand() overloaded");
@@ -25,12 +25,17 @@ if ($pid) {
 
 ok(length(rand_bytes(8)) == 8, "rand_bytes");
 ok(rand(2**64), "rand uint64");
+isnt(rand_bytes(8), ' ' x 8);
 
 # make sure original rand still works
 SKIP: {
 	skip "perl_rand() unsupported on perl < 5.16", 3 if($^V lt 'v5.16');
 
-	# have to make a call first, to make sure srand() was called
+	# have to seed it manually for openbsd, otherwise on at least openbsd 5.8
+	# it assumes you don't want a drand and will use arc4random
+	srand(1);
+
+	# call it for good measure
 	ok(defined perl_rand(), "perl_rand");
 
 	$pid = open($fh, '-|');

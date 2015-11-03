@@ -6,7 +6,7 @@ use POSIX qw(EINTR ENOSYS);
 use Exporter qw(import);
 
 our @EXPORT_OK = qw(perl_rand rand_bytes);
-our $VERSION = '0.02';
+our $VERSION = '0.03';
 
 ## no critic (Subroutines::ProhibitSubroutinePrototypes)
 sub use_urandom(;$) {
@@ -26,13 +26,23 @@ sub use_urandom(;$) {
 	return $max;
 }
 
+my $syscall;
+my $bsd;
 sub try_syscall {
 	my $num = shift;
-	if ($Config{'osname'} !~ m/linux/) {
-		return;
-	}
 
-	my $syscall = $Config{'archname'} =~ m/x86_64/ ? 318 : 355;
+	if(!defined $syscall) {
+		if($Config{'osname'} =~ m/openbsd/i && $Config{'archname'} =~ m/amd64/) {
+			$syscall = 7;
+			$bsd = 1;
+		}elsif ($Config{'osname'} =~ m/linux/) {
+			$syscall = $Config{'archname'} =~ m/x86_64/ ? 318 : 355;
+		}else {
+			$syscall = -1;
+		}
+	}
+	return if($syscall < 0);
+
 	my $ret;
 	my $buf   = ' ' x $num;
 	my $tries = 0;
@@ -43,7 +53,7 @@ sub try_syscall {
 			return;
 		}
 
-		if ($ret != $num) {
+		if ($ret != ($bsd ? 0 : $num)) {
 			warn "Rand::Urandom: huh, getrandom() returned $ret... trying again";
 			$ret = -1;
 			$!   = EINTR;
@@ -55,13 +65,18 @@ sub try_syscall {
 		}
 	} while ($ret == -1 && $! == EINTR);
 
+	# didn't fill in the buffer? fallback
+	return if($buf =~ m/^ +$/);
+
 	return $buf;
 }
 
 sub rand_bytes {
 	my $num = shift;
 
-	my $buf = try_syscall($num);
+	my $buf;
+	$buf = try_syscall($num) if(!defined $syscall || $syscall > 0);
+
 	if (!$buf) {
 		local $! = undef;
 		my $file = -r '/dev/arandom' ? '/dev/arandom' : '/dev/urandom';
