@@ -71,6 +71,7 @@ sub try_syscall {
 	return $buf;
 }
 
+my $fh;
 sub rand_bytes {
 	my $num = shift;
 
@@ -80,13 +81,13 @@ sub rand_bytes {
 	if (!$buf) {
 		local $! = undef;
 		my $file = -r '/dev/arandom' ? '/dev/arandom' : '/dev/urandom';
-		open(my $fh, '<:raw', $file) || die "Rand::Urandom: Can't open $file: $!";
-
-		my $got = read($fh, $buf, $num);
+		if (! $fh) {
+			open($fh, '<:raw', $file) || die "Rand::Urandom: Can't open $file: $!";
+		}
+		my $got = sysread($fh, $buf, $num);
 		if ($got == 0 || $got != $num) {
 			die "Rand::Urandom: failed to read from $file: $!";
 		}
-		close($fh) || die "Rand::Urandom: close failed: $!";
 	}
 	return $buf;
 }
